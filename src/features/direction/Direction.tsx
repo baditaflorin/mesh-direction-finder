@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useCompass } from "@baditaflorin/mesh-common";
 import { createRoomSync } from "../sync/yjsRoom";
 import { maybeFetchTurnCredentials } from "../sync/iceConfig";
 import { appConfig } from "../../shared/config";
@@ -10,10 +11,6 @@ import {
   isAligned,
   panoramas,
 } from "./panoramas";
-
-type DeviceOrientationRequest = {
-  requestPermission?: () => Promise<"granted" | "denied">;
-};
 
 type AwarenessDir = {
   slice?: number;
@@ -40,8 +37,9 @@ const BASE = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");
 
 export function Direction({ roomId, slice, panoramaId }: Props) {
   const [armed, setArmed] = useState(false);
-  const [heading, setHeading] = useState<number | null>(null);
-  const [permissionError, setPermissionError] = useState<string | null>(null);
+  const compass = useCompass({ armed });
+  const heading = compass.heading;
+  const permissionError = compass.error;
   const [calibrationHintSeen, setCalibrationHintSeen] = useState(
     () => localStorage.getItem(`${appConfig.storagePrefix}:calhint`) === "1",
   );
@@ -64,52 +62,6 @@ export function Direction({ roomId, slice, panoramaId }: Props) {
       mesh?.provider?.destroy();
     };
   }, [mesh]);
-
-  // DeviceOrientation → compass heading
-  useEffect(() => {
-    if (!armed) return undefined;
-    let cancelled = false;
-    let onOrient: ((e: DeviceOrientationEvent) => void) | null = null;
-
-    const start = async () => {
-      const req = (window as unknown as { DeviceOrientationEvent?: DeviceOrientationRequest })
-        .DeviceOrientationEvent;
-      if (req?.requestPermission) {
-        try {
-          const result = await req.requestPermission();
-          if (result !== "granted") {
-            setPermissionError("Orientation permission denied — direction can't be measured.");
-            return;
-          }
-        } catch (err) {
-          setPermissionError(`Orientation permission error: ${err}`);
-          return;
-        }
-      }
-      if (cancelled) return;
-
-      onOrient = (e: DeviceOrientationEvent) => {
-        // iOS exposes webkitCompassHeading (already adjusted to magnetic north, 0 = N, clockwise).
-        // Other browsers expose `alpha` (0..360, but z-axis-up rotation; some quirks).
-        const ev = e as DeviceOrientationEvent & { webkitCompassHeading?: number };
-        const h =
-          typeof ev.webkitCompassHeading === "number"
-            ? ev.webkitCompassHeading
-            : typeof ev.alpha === "number"
-              ? (360 - ev.alpha) % 360
-              : null;
-        if (h !== null) setHeading(h);
-      };
-      window.addEventListener("deviceorientation", onOrient, true);
-    };
-
-    void start();
-
-    return () => {
-      cancelled = true;
-      if (onOrient) window.removeEventListener("deviceorientation", onOrient, true);
-    };
-  }, [armed]);
 
   // Publish my awareness state
   useEffect(() => {
