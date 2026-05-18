@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
+import { MeshShell } from "@baditaflorin/mesh-common";
 import { Direction } from "./features/direction/Direction";
-import { SettingsDrawer } from "./features/settings/SettingsDrawer";
+import { SettingsExtras } from "./features/settings/SettingsExtras";
 import { appConfig } from "./shared/config";
 import { SLICE_COUNT, panoramas } from "./features/direction/panoramas";
-import { InviteShareButton, MeshBeacon } from "@baditaflorin/mesh-common";
 
 const STORAGE = {
   room: `${appConfig.storagePrefix}:room`,
@@ -31,7 +31,6 @@ export function App() {
   const [panoramaId, setPanoramaId] = useState(() =>
     readString(STORAGE.panorama, panoramas[0]?.id ?? "sunrise"),
   );
-  const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {
     localStorage.setItem(STORAGE.room, roomId);
@@ -44,45 +43,20 @@ export function App() {
   }, [panoramaId]);
 
   return (
-    <div className="app-root">
+    <MeshShell
+      config={appConfig}
+      roomId={roomId}
+      onRoomChange={setRoomId}
+      settingsExtras={
+        <SettingsExtras
+          slice={slice}
+          onSliceChange={(n) => setSlice(clampSlice(n))}
+          panoramaId={panoramaId}
+          onPanoramaChange={setPanoramaId}
+        />
+      }
+    >
       <Direction roomId={roomId} slice={slice} panoramaId={panoramaId} />
-
-      <InviteShareButton appName={appConfig.appName} roomId={roomId} />
-      <MeshBeacon app={appConfig.appName} room={roomId} />
-
-      <button
-        type="button"
-        className="settings-fab"
-        onClick={() => setSettingsOpen(true)}
-        aria-label="Open settings"
-      >
-        ⚙
-      </button>
-
-      <div className="self-ref">
-        <a href={appConfig.repositoryUrl} target="_blank" rel="noreferrer">
-          source
-        </a>
-        <span aria-hidden="true">·</span>
-        <a href={appConfig.paypalUrl} target="_blank" rel="noreferrer">
-          tip ♥
-        </a>
-        <span aria-hidden="true">·</span>
-        <span>
-          v{appConfig.version} · {appConfig.commit}
-        </span>
-      </div>
-
-      <SettingsDrawer
-        open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
-        roomId={roomId}
-        onRoomChange={setRoomId}
-        slice={slice}
-        onSliceChange={(n) => setSlice(clampSlice(n))}
-        panoramaId={panoramaId}
-        onPanoramaChange={setPanoramaId}
-      />
-    </div>
+    </MeshShell>
   );
 }
