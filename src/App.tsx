@@ -3,6 +3,7 @@ import { Direction } from "./features/direction/Direction";
 import { SettingsDrawer } from "./features/settings/SettingsDrawer";
 import { appConfig } from "./shared/config";
 import { SLICE_COUNT, panoramas } from "./features/direction/panoramas";
+import { InviteShareButton } from "@baditaflorin/mesh-common";
 
 const STORAGE = {
   room: `${appConfig.storagePrefix}:room`,
@@ -46,6 +47,7 @@ export function App() {
     <div className="app-root">
       <Direction roomId={roomId} slice={slice} panoramaId={panoramaId} />
 
+      <InviteShareButton appName={appConfig.appName} roomId={roomId} />
       <button
         type="button"
         className="settings-fab"
