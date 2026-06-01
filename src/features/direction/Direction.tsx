@@ -38,14 +38,45 @@ const BASE = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");
 export function Direction({ roomId, slice, panoramaId }: Props) {
   const [armed, setArmed] = useState(false);
   const compass = useCompass({ armed });
-  const heading = compass.heading;
+  const sensorHeading = compass.heading;
   const permissionError = compass.error;
   const [calibrationHintSeen, setCalibrationHintSeen] = useState(
     () => localStorage.getItem(`${appConfig.storagePrefix}:calhint`) === "1",
   );
   const [allAligned, setAllAligned] = useState({ aligned: 0, total: 0 });
 
+  // Manual-aim fallback. Many devices have no magnetometer (laptops, desktops,
+  // a lot of Android browsers), and iOS needs HTTPS + a granted permission. If
+  // no real heading arrives shortly after arming, we surface a manual aim
+  // slider so the cross-screen panorama is still usable everywhere — the app
+  // never dead-ends on "Waiting for compass…". A live sensor reading always
+  // wins over the manual value.
   const targetBearing = bearingForSlice(panoramaId, slice);
+  const [manualMode, setManualMode] = useState(false);
+  // Start the manual aim 90° off the target so the user has something to do
+  // (drag toward the target to reveal the slice) — defaulting it onto the
+  // target would show the slice instantly and defeat the "aim to reveal" point.
+  const [manualHeading, setManualHeading] = useState(() => Math.round((targetBearing + 90) % 360));
+
+  // After arming, if the sensor hasn't produced a heading within 2.5s, fall
+  // back to manual aim. A denied/unsupported sensor flips this immediately.
+  useEffect(() => {
+    if (!armed) return undefined;
+    if (sensorHeading !== null) {
+      setManualMode(false);
+      return undefined;
+    }
+    if (permissionError) {
+      setManualMode(true);
+      return undefined;
+    }
+    const t = setTimeout(() => setManualMode(true), 2500);
+    return () => clearTimeout(t);
+  }, [armed, sensorHeading, permissionError]);
+
+  // The heading the rest of the UI + the mesh act on: real sensor when present,
+  // otherwise the user's manual aim once they've opted into it.
+  const heading = sensorHeading ?? (manualMode ? manualHeading : null);
 
   const mesh = useMemo(() => {
     if (!armed) return null;
@@ -120,6 +151,7 @@ export function Direction({ roomId, slice, panoramaId }: Props) {
         </button>
         <p className="dir-hint">
           Target bearing: <strong>{Math.round(targetBearing)}°</strong>. Room <code>{roomId}</code>.
+          No compass? You can aim manually — works on any device.
         </p>
       </div>
     );
@@ -131,10 +163,12 @@ export function Direction({ roomId, slice, panoramaId }: Props) {
         <div className="dir-msg">
           {permissionError ?? "Waiting for compass…"}
           <p className="dir-hint">
-            If your compass never reports a heading, your browser may not support DeviceOrientation,
-            or you may need to enable Location services for Safari (iOS uses GPS heading on first
-            calibration).
+            No compass yet. iOS needs Location services on for Safari; many laptops and desktops
+            have no magnetometer at all.
           </p>
+          <button type="button" className="dir-arm-button" onClick={() => setManualMode(true)}>
+            Aim manually instead
+          </button>
         </div>
       </div>
     );
@@ -143,10 +177,11 @@ export function Direction({ roomId, slice, panoramaId }: Props) {
   const aligned = isAligned(targetBearing, heading);
   const diff = angleDiff(targetBearing, heading);
   const sliceImg = `${BASE}/panoramas/${panoramaId}/slice-${slice}.png`;
+  const usingManual = sensorHeading === null && manualMode;
 
   return (
     <div className={`dir-stage ${aligned ? "dir-aligned" : "dir-misaligned"}`}>
-      {!calibrationHintSeen && (
+      {!calibrationHintSeen && !usingManual && (
         <div className="dir-calhint">
           <p>
             Wave your phone in a figure-8 for ~5 seconds to calibrate the magnetometer. Indoor
@@ -155,6 +190,22 @@ export function Direction({ roomId, slice, panoramaId }: Props) {
           <button type="button" onClick={dismissCalHint}>
             Got it
           </button>
+        </div>
+      )}
+
+      {usingManual && (
+        <div className="dir-manual">
+          <label htmlFor="dir-manual-aim">
+            No compass detected — aim manually ({Math.round(manualHeading)}°)
+          </label>
+          <input
+            id="dir-manual-aim"
+            type="range"
+            min={0}
+            max={359}
+            value={manualHeading}
+            onChange={(e) => setManualHeading(Number(e.target.value))}
+          />
         </div>
       )}
 

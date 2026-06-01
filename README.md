@@ -11,6 +11,8 @@
 
 Pick a panorama (4 bundled samples). Each phone gets a slice number; the phone's target bearing is `startBearing + (slice - 1) × 90°`. Point your phone at the bearing — within ±15° you see the slice; outside that tolerance you see a big arrow pointing toward the target ("turn right 47°"). When all N phones are aligned, the group sees the panorama wrap around the room.
 
+**No compass? It still works.** Devices without a magnetometer (most laptops/desktops, many Android browsers) fall back to a manual aim slider, so you can demo the cross-screen panorama on any two tabs — the app never dead-ends on "Waiting for compass…".
+
 ## How it works
 
 - `DeviceOrientationEvent` is read with `webkitCompassHeading` (iOS) or `(360 − alpha)` (others) to get magnetic-north heading in degrees.
